@@ -1,0 +1,116 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and budget settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "familyId": { "type": "string" },
+        "plaidAccessToken": { "type": "string" },
+        "plaidItemId": { "type": "string" },
+        "budgetSettings": {
+          "type": "object",
+          "properties": {
+            "payPeriodStart": { "type": "string", "format": "date-time" },
+            "cycleStart": { "type": "string", "format": "date-time" }
+          }
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Family": {
+      "title": "Family",
+      "description": "A group of users sharing a budget",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "members": { "type": "array", "items": { "type": "string" } },
+        "ownerId": { "type": "string" },
+        "categories": { 
+          "type": "array", 
+          "items": { 
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["expense", "income"] }
+            }
+          }
+        }
+      },
+      "required": ["id", "members", "ownerId"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial transaction from Plaid",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "familyId": { "type": "string" },
+        "userId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "category": { "type": "string" },
+        "name": { "type": "string" },
+        "pending": { "type": "boolean" },
+        "accountId": { "type": "string" }
+      },
+      "required": ["id", "familyId", "amount", "date", "name"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "Budget allocation for a category in a cycle",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "familyId": { "type": "string" },
+        "userId": { "type": "string" },
+        "category": { "type": "string" },
+        "amount": { "type": "number" },
+        "cycleId": { "type": "string" },
+        "type": { "type": "string", "enum": ["expense", "income"] }
+      },
+      "required": ["id", "familyId", "category", "amount", "cycleId", "type"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Family group invitation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "fromUid": { "type": "string" },
+        "fromEmail": { "type": "string" },
+        "familyId": { "type": "string" },
+        "familyName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "fromUid", "fromEmail", "familyId", "familyName", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile and settings"
+    },
+    "/families/{familyId}": {
+      "schema": "Family",
+      "description": "Family group data"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User transactions"
+    },
+    "/budgets/{budgetId}": {
+      "schema": "Budget",
+      "description": "User budget allocations"
+    },
+    "/invitations/{invitationId}": {
+      "schema": "Invitation",
+      "description": "Family invitations"
+    }
+  }
+}

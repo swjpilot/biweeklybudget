@@ -1,0 +1,125 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    function isInFamily(familyId) {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/families/$(familyId)) &&
+             get(/databases/$(database)/documents/families/$(familyId)).data.members.hasAny([request.auth.uid]);
+    }
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) ||
+             request.resource.data.uid == request.auth.uid;
+    }
+    function uidNotModified() {
+      return !('uid' in request.resource.data) ||
+             request.resource.data.uid == resource.data.uid;
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.email.size() > 0 && data.email.size() < 100;
+    }
+    function isValidFamily(data) {
+      return hasRequiredFields(['id', 'members', 'ownerId']) &&
+             data.id is string &&
+             data.members is list &&
+             data.ownerId is string &&
+             data.members.hasAny([request.auth.uid]) &&
+             (!('categories' in data) || data.categories is list);
+    }
+    function isValidTransaction(data) {
+      return hasRequiredFields(['id', 'familyId', 'amount', 'date', 'name']) &&
+             data.id is string &&
+             data.familyId is string &&
+             data.amount is number &&
+             data.date is string &&
+             data.name is string &&
+             data.name.size() > 0 && data.name.size() < 200;
+    }
+    function isValidBudget(data) {
+      return hasRequiredFields(['id', 'familyId', 'category', 'amount', 'cycleId', 'type']) &&
+             data.id is string &&
+             data.familyId is string &&
+             data.category is string &&
+             data.amount is number &&
+             data.cycleId is string &&
+             data.type in ['expense', 'income'];
+    }
+    function isValidInvitation(data) {
+      return hasRequiredFields(['id', 'email', 'fromUid', 'fromEmail', 'familyId', 'familyName', 'status', 'createdAt']) &&
+             data.id is string &&
+             data.email is string &&
+             data.fromUid is string &&
+             data.fromEmail is string &&
+             data.familyId is string &&
+             data.familyName is string &&
+             data.status in ['pending', 'accepted', 'declined', 'cancelled'] &&
+             data.createdAt is string;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // User Profile
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && uidNotModified();
+    }
+
+    // Families
+    match /families/{familyId} {
+      allow read: if isAuthenticated() && resource.data.members.hasAny([request.auth.uid]);
+      allow create: if isAuthenticated() && isValidFamily(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.members.hasAny([request.auth.uid]) && isValidFamily(request.resource.data);
+    }
+
+    // Transactions
+    match /transactions/{transactionId} {
+      allow read: if isAuthenticated() && isInFamily(resource.data.familyId);
+      allow create: if isAuthenticated() && isInFamily(request.resource.data.familyId) && isValidTransaction(request.resource.data);
+      allow update: if isAuthenticated() && isInFamily(resource.data.familyId) && isInFamily(request.resource.data.familyId) && isValidTransaction(request.resource.data);
+      allow delete: if isAuthenticated() && isInFamily(resource.data.familyId);
+    }
+
+    // Budgets
+    match /budgets/{budgetId} {
+      allow read: if isAuthenticated() && isInFamily(resource.data.familyId);
+      allow create: if isAuthenticated() && isInFamily(request.resource.data.familyId) && isValidBudget(request.resource.data);
+      allow update: if isAuthenticated() && isInFamily(resource.data.familyId) && isInFamily(request.resource.data.familyId) && isValidBudget(request.resource.data);
+      allow delete: if isAuthenticated() && isInFamily(resource.data.familyId);
+    }
+
+    // Invitations
+    match /invitations/{invitationId} {
+      // Allow read if the user is the recipient or the sender
+      allow read: if isAuthenticated() && (request.auth.uid == resource.data.fromUid || request.auth.token.email == resource.data.email);
+      // Allow create if the user is the sender and is in the family they're inviting to
+      allow create: if isAuthenticated() && request.auth.uid == request.resource.data.fromUid && isInFamily(request.resource.data.familyId) && isValidInvitation(request.resource.data);
+      // Allow update if the user is the recipient (to accept/decline) or the sender (to cancel)
+      allow update: if isAuthenticated() && (request.auth.uid == resource.data.fromUid || request.auth.token.email == resource.data.email) && isValidInvitation(request.resource.data);
+      allow delete: if isAuthenticated() && request.auth.uid == resource.data.fromUid;
+    }
+  }
+}

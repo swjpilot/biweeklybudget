@@ -1,0 +1,5 @@
+{
+  "name": "Bi-Weekly Budget Planner",
+  "description": "A bi-weekly budgeting app with Plaid integration for real-time transaction tracking.",
+  "requestFramePermissions": []
+}
